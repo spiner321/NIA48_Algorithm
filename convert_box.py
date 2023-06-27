@@ -552,10 +552,11 @@ if __name__ == '__main__':
                     f.write(error)
 
                 with open(f'errors/{scene}.txt', 'a') as f:
-                    f.write('--------------------------------------------------------------------------------\n')
-                    f.write(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]\n')
+                    line = '-' * 100
+                    f.write(f'{line}\n')
+                    f.write(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]\n\n')
                     f.write(traceback.format_exc())
-                    f.write('--------------------------------------------------------------------------------\n')
+                    f.write(f'{line}\n\n')
 
                 print(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]')
 
