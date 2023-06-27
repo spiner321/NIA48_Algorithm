@@ -11,6 +11,7 @@ import open3d as o3d
 import math
 import copy
 import time
+import traceback
 from tqdm.notebook import tqdm as tqdm_nb
 from tqdm import tqdm
 
@@ -130,7 +131,8 @@ class Fit3dBox:
         z = bf_z_min + h/2
 
         bf_box['dimension'] = [w, h, l]
-        bf_box['location'] = np.dot(bf_rmat, np.array([x, y, z]).T).tolist()
+        bf_box['location'] = [x, y, z]
+        # bf_box['location'] = np.dot(bf_rmat, np.array([x, y, z]).T).tolist()
         
         for tf_ann in tf_anns:
             if tf_ann['category']=='ROAD_SIGN' and tf_ann['id']==bf_id:
@@ -355,7 +357,7 @@ class Fit3dBox:
 
                 # left_tf_box['location'] = (np.asarray(left_tf_box['location']) + mov_left_loc).tolist()
                 center_tf_box['location'] = (np.asarray(center_tf_box['location']) + mov_center_loc).tolist()
-                right_tf_box['location'] = (np.asarray(right_tf_box['location']) + mov_right_loc).tolist()
+                # right_tf_box['location'] = (np.asarray(right_tf_box['location']) + mov_right_loc).tolist()
 
                 left_tf_box['location'][1] = center_tf_box['location'][1] + center_tf_box['dimension'][0]/2 - left_tf_box['dimension'][0]/2
                 left_tf_box['location'][2] = center_tf_box['location'][2] - center_tf_box['dimension'][1]/2 - left_tf_box['dimension'][1]/2
@@ -412,9 +414,9 @@ class PointHandler:
         z_min = np.min(corners_3d[2, :])
         z_max = np.max(corners_3d[2, :])
 
-        pcd_range = tf_pcd[(tf_pcd[:,0] > x_min) & (tf_pcd[:,0] < x_max) & \
-                            (tf_pcd[:,1] > y_min) & (tf_pcd[:,1] < y_max) & \
-                            (tf_pcd[:,2] > z_min) & (tf_pcd[:,2] < z_max)]
+        pcd_range = tf_pcd[(tf_pcd[:,0] >= x_min) & (tf_pcd[:,0] <= x_max) & \
+                            (tf_pcd[:,1] >= y_min) & (tf_pcd[:,1] <= y_max) & \
+                            (tf_pcd[:,2] >= z_min) & (tf_pcd[:,2] <= z_max)]
 
         pcd_in_dim = np.dot(rmat_inv, pcd_range.T)
 
@@ -523,9 +525,11 @@ if __name__ == '__main__':
     bf_df = pd.read_csv('/data/kimgh/NIA48_Algorithm/bestframe_roadsign_tunnel.csv', index_col=0)
     bf_df = bf_df.sort_values(by=['category', 'clipname']).reset_index(drop=True)
     bf_df = bf_df[['clipname', 'bestframe', 'id', 'category']]
+    bf_df = bf_df.loc[bf_df['category']=='TUNNEL'].reset_index(drop=True)
 
     start = time.time()
 
+    os.makedirs('errors', exist_ok=True)
 
     def convert_box(scene, bf_num, bf_id, categories):
         # print(f'Converting Start - [scene: {scene} / bf: {bf_num} / bf_id: {bf_id} / category: {categories}]')
@@ -540,12 +544,25 @@ if __name__ == '__main__':
         
         # for tf_num in tqdm(frames, desc=f'[scene: {scene} / bf: {bf_num} / bf_id: {bf_id} / category: {categories}]'):
         for tf_num in frames:
-            ConvertBox(scene_path, bf_num, bf_id, tf_num, categories).converting()
+            try:
+                ConvertBox(scene_path, bf_num, bf_id, tf_num, categories).converting()
+            except:
+                error = f'{scene},{bf_num},{tf_num},{bf_id},{categories}\n'
+                with open('errors/error_ls.txt', 'a') as f:
+                    f.write(error)
+
+                with open(f'errors/{scene}.txt', 'a') as f:
+                    f.write('--------------------------------------------------------------------------------\n')
+                    f.write(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]\n')
+                    f.write(traceback.format_exc())
+                    f.write('--------------------------------------------------------------------------------\n')
+
+                print(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]')
 
         delta_time = time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 
         done_idx = bf_df.loc[(bf_df['clipname']==scene)].index[0] + 1
-        print(f'Converting Done - [{done_idx}/{len(bf_df)}]|[Tot: {delta_time}] [Scene: {scene} | Bf: {bf_num} | Bf_id: {bf_id} | Category: {categories}]')
+        print(f'Converting Done - [{done_idx}/{len(bf_df)}][Tot: {delta_time}] [Scene: {scene} | Bf: {bf_num} | Bf_id: {bf_id} | Category: {categories}]')
         
     # scenes = bf_df.values[:, 0]
     # bf_nums = bf_df.values[:, 1]
@@ -553,8 +570,8 @@ if __name__ == '__main__':
     # categories = bf_df.values[:, 3]
     # inputs = zip(scenes, bf_nums, bf_ids, categories)
 
-    pool = mp.Pool(processes=40)
-    # pool.starmap(convert_box, inputs)
-    pool.starmap(convert_box, bf_df.values)
-    pool.close()
-    pool.join()
+    with mp.Pool(processes=40) as pool:
+        # pool.starmap(convert_box, inputs)
+        pool.starmap(convert_box, bf_df.values)
+        pool.close()
+        pool.join()
