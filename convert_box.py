@@ -103,7 +103,7 @@ class Fit3dBox:
         bf_rotation_y = bf_box['rotation_y']
 
         if 'Rain' not in weather:
-            bf_extra_range = [0, 1, 0] # w, h, l에 더할 값
+            bf_extra_range = [0, 2, 0] # w, h, l에 더할 값
         else:
             bf_extra_range = [0, 0, 0]
 
@@ -112,19 +112,21 @@ class Fit3dBox:
         bf_rmat, bf_rmat_inv = self._rmat_and_inv(bf_rotation_y)
         
         bf_corners_3d = self._get_3d_corners(bf_location, bf_extra_dim, bf_rmat)
-        bf_pcd_in_dim = self._get_pcd_in_dim(bf_pcd, bf_corners_3d, bf_rmat_inv)
+        bf_pcd_in_dim = self._get_pcd_in_dim(bf_pcd, bf_corners_3d)
+        # bf_pcd_in_dim_inv = np.dot(bf_rmat_inv, bf_pcd_in_dim.T).T
+        bf_pcd_in_dim_inv = self._return_rot(bf_pcd_in_dim, bf_location, bf_rmat_inv)
 
         # 박스 범위 조정
-        bf_x_min = np.min(bf_pcd_in_dim[:,0])
-        bf_x_max = np.max(bf_pcd_in_dim[:,0])
-        bf_y_min = np.min(bf_pcd_in_dim[:,1])
-        bf_y_max = np.max(bf_pcd_in_dim[:,1])
-        bf_z_min = np.min(bf_pcd_in_dim[:,2])
-        bf_z_max = np.max(bf_pcd_in_dim[:,2])
+        bf_x_min = np.min(bf_pcd_in_dim_inv[:,0])
+        bf_x_max = np.max(bf_pcd_in_dim_inv[:,0])
+        bf_y_min = np.min(bf_pcd_in_dim_inv[:,1])
+        bf_y_max = np.max(bf_pcd_in_dim_inv[:,1])
+        bf_z_min = np.min(bf_pcd_in_dim_inv[:,2])
+        bf_z_max = np.max(bf_pcd_in_dim_inv[:,2])
 
         w = abs(bf_y_max - bf_y_min)
         h = abs(bf_z_max - bf_z_min)
-        l = abs(bf_x_max - bf_x_min) + 0.1
+        l = abs(bf_x_max - bf_x_min)
 
         x = bf_x_min + l/2
         y = bf_y_min + w/2
@@ -132,7 +134,6 @@ class Fit3dBox:
 
         bf_box['dimension'] = [w, h, l]
         bf_box['location'] = [x, y, z]
-        # bf_box['location'] = np.dot(bf_rmat, np.array([x, y, z]).T).tolist()
         
         for tf_ann in tf_anns:
             if tf_ann['category']=='ROAD_SIGN' and tf_ann['id']==bf_id:
@@ -147,34 +148,49 @@ class Fit3dBox:
                 dimension = tf_box['dimension'] # w, h, l
                 rotation_y = tf_box['rotation_y']
 
-                extra_range = [0, 1, 0.5] # w, h, l에 더할 값
+                if dimension[0] >= dimension[2]: # pcd 정면방향과 표지판의 정면방향이 일치할 경우
+                    extra_range = [0, 2, 0.5]  # w, h, l에 더할 값
+                elif dimension[0] < dimension[2]: # pcd 정면방향과 표지판의 정면방향이 수직일 경우
+                    extra_range = [0.5, 2, 0]
                 extra_dim = np.array(dimension) + np.array(extra_range)
 
                 rmat, rmat_inv = self._rmat_and_inv(rotation_y)
-                
+
                 corners_3d = self._get_3d_corners(location, extra_dim, rmat)
-                pcd_in_dim = self._get_pcd_in_dim(tf_pcd, corners_3d, rmat_inv)
+                corners_3d_origin = self._get_3d_corners(location, dimension, rmat)
+                corners_3d_origin_inv = self._return_rot(corners_3d_origin.T, location, rmat_inv)
+
+                pcd_in_dim = self._get_pcd_in_dim(tf_pcd, corners_3d)
+                pcd_in_dim_inv = self._return_rot(pcd_in_dim, location, rmat_inv)
 
                 # 원점에서 가장 가까운 x값에 근접하도록 박스를 이동
-                x_dim_min = location[0] - extra_dim[2]/2
-                x_pcd_min = np.min(pcd_in_dim[:,0])
-                x_diff = x_dim_min - x_pcd_min
-                    
-                if x_diff >= 0: # pcd가 dimension 안에 속한 경우
-                    tf_box['location'][0] = location[0] - extra_range[2]/2 + x_diff - 0.01 # extra_range 영향 제거 / 선과 pcd가 닿지 않도록 해주는 여유값 추가 (0.01m)
-                else: # pcd가 dimension 밖에 있는 경우
-                    tf_box['location'][0] = location[0] - extra_range[2]/2 - x_diff - 0.01
+                if dimension[0] >= dimension[2]:
+                    x_dim_min = np.min(corners_3d_origin_inv[:,0])
+                    x_pcd_min = np.min(pcd_in_dim_inv[:,0])
+
+                    x_diff = x_dim_min - x_pcd_min
+
+                    tf_box['location'][0] = location[0] - x_diff
+
+                elif dimension[0] < dimension[2]:
+                    y_dim_min = np.min(corners_3d_origin_inv[:,1])
+                    y_pcd_min = np.min(pcd_in_dim_inv[:,1])
+
+                    y_diff = y_dim_min - y_pcd_min
+
+                    tf_box['location'][0] = location[0] - y_diff
+
 
                 # 원점에서 가장 가까운 z값에 근접하도록 박스를 이동, weather에 따라 다르게 적용
                 if 'Rain' not in weather:
-                    z_dim_min = location[2] - extra_dim[1]/2
-                    z_pcd_min = np.min(pcd_in_dim[:,2])
+                    z_dim_min = np.min(corners_3d_origin_inv[:,2])
+                    z_pcd_min = np.min(pcd_in_dim_inv[:,2])
                     z_diff = z_dim_min - z_pcd_min
 
-                    if z_diff >= 0: # pcd가 dimension 안에 속한 경우
-                        tf_box['location'][2] = location[2] - extra_range[1]/2 + z_diff - 0.01
-                    else: # pcd가 dimension 밖에 있는 경우
-                        tf_box['location'][2] = location[2] - extra_range[1]/2 - z_diff - 0.01
+                    tf_box['location'][2] = location[2] - z_diff
+
+                tf_box['dimension'] = np.asarray(tf_box['dimension']) + 0.05
+                tf_box['dimension'] = tf_box['dimension'].tolist()
 
         return tf_anns
 
@@ -373,8 +389,9 @@ class Fit3dBox:
 class PointHandler:
 
     def _rmat_and_inv(self, rotation_y):
+        '''rotation_y: radian'''
         euler_angle = [0,0, rotation_y]
-        rot = R.from_euler('xyz', euler_angle, degrees=True)  # type: ignore
+        rot = R.from_euler('xyz', euler_angle, degrees=False)
         rot_inv = rot.inv()
         rmat = np.array(rot.as_matrix())
         rmat_inv = np.array(rot_inv.as_matrix())
@@ -421,6 +438,20 @@ class PointHandler:
         pcd_in_dim = np.dot(rmat_inv, pcd_range.T)
 
         return pcd_in_dim.T
+
+
+    def _return_rot(self, array, location, rmat_inv):
+        array[:, 0] = array[:, 0] - location[0]
+        array[:, 1] = array[:, 1] - location[1]
+        array[:, 2] = array[:, 2] - location[2]
+
+        array = np.dot(rmat_inv, array.T).T
+
+        array[:, 0] = array[:, 0] + location[0]
+        array[:, 1] = array[:, 1] + location[1]
+        array[:, 2] = array[:, 2] + location[2]
+
+        return array
 
 
 
@@ -525,7 +556,7 @@ if __name__ == '__main__':
     bf_df = pd.read_csv('/data/kimgh/NIA48_Algorithm/bestframe_roadsign_tunnel.csv', index_col=0)
     bf_df = bf_df.sort_values(by=['category', 'clipname']).reset_index(drop=True)
     bf_df = bf_df[['clipname', 'bestframe', 'id', 'category']]
-    bf_df = bf_df.loc[bf_df['category']=='TUNNEL'].reset_index(drop=True)
+    bf_df = bf_df.loc[bf_df['category']=='ROAD_SIGN'].reset_index(drop=True)
 
     start = time.time()
 
@@ -546,19 +577,22 @@ if __name__ == '__main__':
         for tf_num in frames:
             try:
                 ConvertBox(scene_path, bf_num, bf_id, tf_num, categories).converting()
-            except:
-                error = f'{scene},{bf_num},{tf_num},{bf_id},{categories}\n'
+            except Exception as e:
+                error_type = traceback.format_exception(e)[-1].split(':')[0]
+                error = f'{scene},{bf_num},{tf_num},{bf_id},{categories},{error_type}\n'
                 with open('errors/error_ls.txt', 'a') as f:
                     f.write(error)
 
-                with open(f'errors/{scene}.txt', 'a') as f:
+                os.makedirs(f'errors/{error_type}', exist_ok=True)
+                with open(f'errors/{error_type}/{scene}.txt', 'a') as f:
                     line = '-' * 100
                     f.write(f'{line}\n')
-                    f.write(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]\n\n')
+                    f.write(f'Error - [Scene: {scene}  Bf: {bf_num} | Tf: {tf_num} | Bf_id: {bf_id} | Category: {categories}]\n')
+                    f.write(f'Scene Path: {scene_path}\n\n')
                     f.write(traceback.format_exc())
                     f.write(f'{line}\n\n')
 
-                print(f'Error - [Scene: {scene}  Bf: {bf_num} / Tf: {tf_num} / Bf_id: {bf_id} / Category: {categories}]')
+                print(f'Error - [Scene: {scene}  Bf: {bf_num} | Tf: {tf_num} | Bf_id: {bf_id} | Category: {categories}]')
 
         delta_time = time.strftime('%H:%M:%S', time.gmtime(time.time()-start))
 
