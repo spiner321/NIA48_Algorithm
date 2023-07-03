@@ -197,32 +197,32 @@ class Fit3dBox:
     
     def tunnel(self):
 
-        def find_edge(location, pcd_in_dim, rmat_inv, floor_point, pillar_loc: str='left'):
+        def find_edge(location, pcd_in_dim_inv, rmat_inv, floor_point, pillar_loc: str='left'):
             margin = 0
 
             while True:
                 try:
-                    temp_pcd_in_dim = copy.deepcopy(pcd_in_dim)
-                    temp_pcd_in_dim = temp_pcd_in_dim[(temp_pcd_in_dim[:, 2] > floor_point) & \
-                                                    (temp_pcd_in_dim[:, 0] >= location[0] - 5) & (temp_pcd_in_dim[:, 0] <= location[0] + 5)]
-                    # front_box = temp_pcd_in_dim[:, [1, 2]]
-                    z_cord = np.around(temp_pcd_in_dim[:, 2], 1)
-                    temp_pcd_in_dim[:, 2] = z_cord
+                    temp_pcd_in_dim_inv = copy.deepcopy(pcd_in_dim_inv)
+                    temp_pcd_in_dim_inv = temp_pcd_in_dim_inv[(temp_pcd_in_dim_inv[:, 2] > floor_point) & \
+                                                    (temp_pcd_in_dim_inv[:, 0] >= location[0] - 4.5) & (temp_pcd_in_dim_inv[:, 0] <= location[0] + 4.5)]
+                    # front_box = temp_pcd_in_dim_inv[:, [1, 2]]
+                    z_cord = np.around(temp_pcd_in_dim_inv[:, 2], 1)
+                    temp_pcd_in_dim_inv[:, 2] = z_cord
 
                     left_edge = []
                     right_edge = []
 
                     # 연석 찾기
                     for z_dot in sorted(set(z_cord))[:10]:
-                        y_dot = temp_pcd_in_dim[temp_pcd_in_dim[:, 2]==z_dot, 1]
+                        y_dot = temp_pcd_in_dim_inv[temp_pcd_in_dim_inv[:, 2]==z_dot, 1]
                         if pillar_loc == 'left':
                             right_edge.append(np.min(y_dot))
                         elif pillar_loc == 'right':
                             left_edge.append(np.max(y_dot))
                             
-                    # 터널 벽면 찾기
+                    # 터널 기둥 벽면 찾기
                     for z_dot in sorted(set(z_cord))[10:30]:
-                        y_dot = temp_pcd_in_dim[temp_pcd_in_dim[:, 2]==z_dot, 1]
+                        y_dot = temp_pcd_in_dim_inv[temp_pcd_in_dim_inv[:, 2]==z_dot, 1]
                         if pillar_loc == 'left':
                             left_edge.append(np.min(y_dot))
                         elif pillar_loc == 'right':
@@ -237,16 +237,16 @@ class Fit3dBox:
                     left_point = np.max(left_edge)
                     right_point = np.min(right_edge)
 
-                    # 터널 높이 정하기
+                    # 터널 기둥 높이 정하기
                     if pillar_loc == 'left':
-                        top_edge = pcd_in_dim[(pcd_in_dim[:, 1]>=right_point - margin) & (pcd_in_dim[:, 1]<=right_point + margin) & \
-                                            (pcd_in_dim[:, 0]>=location[0] - 5) & (pcd_in_dim[:, 0]<=location[0] + 5) & \
-                                            (pcd_in_dim[:, 2]>location[2]), 2]
+                        top_edge = pcd_in_dim_inv[(pcd_in_dim_inv[:, 1]>=right_point - margin) & (pcd_in_dim_inv[:, 1]<=right_point + margin) & \
+                                            (pcd_in_dim_inv[:, 0]>=location[0] - 5) & (pcd_in_dim_inv[:, 0]<=location[0] + 5) & \
+                                            (pcd_in_dim_inv[:, 2]>location[2]), 2]
                         top_point = np.min(top_edge)
                     elif pillar_loc == 'right':
-                        top_edge = pcd_in_dim[(pcd_in_dim[:, 1]>=left_point - margin) & (pcd_in_dim[:, 1]<=left_point + margin) & \
-                                            (pcd_in_dim[:, 0]>=location[0] - 5) & (pcd_in_dim[:, 0]<=location[0] + 5) & \
-                                            (pcd_in_dim[:, 2]>location[2]), 2]
+                        top_edge = pcd_in_dim_inv[(pcd_in_dim_inv[:, 1]>=left_point - margin) & (pcd_in_dim_inv[:, 1]<=left_point + margin) & \
+                                            (pcd_in_dim_inv[:, 0]>=location[0] - 5) & (pcd_in_dim_inv[:, 0]<=location[0] + 5) & \
+                                            (pcd_in_dim_inv[:, 2]>location[2]), 2]
                         top_point = np.min(top_edge)
 
                     if len(left_edge) > 0 and len(right_edge) > 0 and len(top_edge) > 0:
@@ -255,13 +255,21 @@ class Fit3dBox:
                 except:
                     margin += 0.05
                     pass
+
+            # left_point_inv = pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==left_point] - np.asarray(location)
+            # left_point_inv = np.dot(rmat_inv, left_point_inv.T)[1, 0]
+
+            # right_point_inv = pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==right_point] - np.asarray(location)
+            # right_point_inv = np.dot(rmat_inv, right_point_inv.T)[1, 0]
             
-            left_point = np.dot(rmat_inv, pcd_in_dim[pcd_in_dim[:, 1]==left_point].T)[1, 0]
-            right_point = np.dot(rmat_inv, pcd_in_dim[pcd_in_dim[:, 1]==right_point].T)[1, 0]
+            # left_point = np.dot(rmat_inv, pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==left_point].T)[1, 0]
+            # right_point = np.dot(rmat_inv, pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==right_point].T)[1, 0]
 
             if pillar_loc == 'left':
                 left_point += 0.2
+                right_point -= 0.1
             elif pillar_loc == 'right':
+                left_point += 0.1
                 right_point -= 0.2
 
             return left_point, right_point, top_point
@@ -300,13 +308,14 @@ class Fit3dBox:
             rmat, rmat_inv = self._rmat_and_inv(rotation_y)
 
             corners_3d = self._get_3d_corners(location, extra_dim, rmat)
-            pcd_in_dim = self._get_pcd_in_dim(bf_pcd, corners_3d, rmat_inv)
+            pcd_in_dim = self._get_pcd_in_dim(bf_pcd, corners_3d)
+            pcd_in_dim_inv = self._return_rot(pcd_in_dim, location, rmat_inv)
 
             # 지면 찾기
-            floor_point = self.find_floor(pcd_in_dim, location)
+            floor_point = self.find_floor(pcd_in_dim_inv, location)
 
             # 기둥 범위 정하기
-            left_point, right_point, top_point = find_edge(location, pcd_in_dim, rmat_inv, floor_point, pillar_loc=pillar_loc)
+            left_point, right_point, top_point = find_edge(location, pcd_in_dim_inv, rmat_inv, floor_point, pillar_loc=pillar_loc)
 
             w = abs(left_point - right_point)
             h = abs(top_point - floor_point)
@@ -355,6 +364,29 @@ class Fit3dBox:
 
         bf_anns[matching_id]['3d_box'] = [left_bf_box, center_bf_box, right_bf_box]
 
+        # 상판 이동 거리 기준 저장
+        center_location = center_bf_box['location']
+        center_dimension = center_bf_box['dimension'] # w, h, l
+        center_rotation_y = center_bf_box['rotation_y']
+
+        rmat, rmat_inv = self._rmat_and_inv(center_rotation_y)
+        center_corners_3d = self._get_3d_corners(center_location, center_dimension, rmat)
+        center_pcd_in_dim = self._get_pcd_in_dim(bf_pcd, center_corners_3d)
+        center_pcd_in_dim_inv = self._return_rot(center_pcd_in_dim, center_location, rmat_inv)
+
+        # center_left_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] > center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
+        # center_right_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] < center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
+        center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
+                                                    (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
+        center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
+        center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
+
+        center_left_point = np.min(center_left_range[:, 1])
+        center_right_point = np.max(center_right_range[:, 1])
+
+        center_y = center_left_point - abs(center_left_point - center_right_point)/2
+        center_y_mov = center_location[1] - center_y
+
         # mov_left_loc = np.asarray(left_bf_box['location']) - np.asarray(left_location_ori)
         mov_center_loc = np.asarray(center_bf_box['location']) - np.asarray(center_location_ori)
         # mov_right_loc = np.asarray(right_bf_box['location']) - np.asarray(right_location_ori)
@@ -375,6 +407,32 @@ class Fit3dBox:
                 center_tf_box['location'] = (np.asarray(center_tf_box['location']) + mov_center_loc).tolist()
                 # right_tf_box['location'] = (np.asarray(right_tf_box['location']) + mov_right_loc).tolist()
 
+                # 상판 박스 중앙 위치 조정
+                center_location = center_tf_box['location']
+                center_dimension = center_tf_box['dimension'] # w, h, l
+                center_rotation_y = center_tf_box['rotation_y']
+
+                rmat, rmat_inv = self._rmat_and_inv(center_rotation_y)
+                center_corners_3d = self._get_3d_corners(center_location, center_dimension, rmat)
+                center_pcd_in_dim = self._get_pcd_in_dim(tf_pcd, center_corners_3d)
+                center_pcd_in_dim_inv = self._return_rot(center_pcd_in_dim, center_location, rmat_inv)
+
+                # center_left_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] > center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
+                # center_right_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] < center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
+
+                center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
+                                                            (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
+                center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
+                center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
+
+                center_left_point = np.min(center_left_range[:, 1])
+                center_right_point = np.max(center_right_range[:, 1])
+                
+                center_y = center_left_point - abs(center_left_point - center_right_point)/2
+                center_tf_box['location'][1] = center_y + center_y_mov
+
+
+                # 기둥 위치 조정
                 left_tf_box['location'][1] = center_tf_box['location'][1] + center_tf_box['dimension'][0]/2 - left_tf_box['dimension'][0]/2
                 left_tf_box['location'][2] = center_tf_box['location'][2] - center_tf_box['dimension'][1]/2 - left_tf_box['dimension'][1]/2
                 right_tf_box['location'][1] = center_tf_box['location'][1] - center_tf_box['dimension'][0]/2 + right_tf_box['dimension'][0]/2
