@@ -2,4 +2,4 @@ sampledata/*
 *.pkl
 *.txt
 *.csv
-/test_label
+test_label

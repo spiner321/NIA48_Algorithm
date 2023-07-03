@@ -228,12 +228,6 @@ class Fit3dBox:
                         elif pillar_loc == 'right':
                             right_edge.append(np.max(y_dot))
                     
-                    # if pillar_loc == 'left':
-                    #     left_point = np.max(left_edge)
-                    #     right_point = np.min(right_edge)
-                    # elif pillar_loc == 'right':
-                    #     left_point = np.max(left_edge)
-                    #     right_point = np.min(right_edge)
                     left_point = np.max(left_edge)
                     right_point = np.min(right_edge)
 
@@ -255,15 +249,6 @@ class Fit3dBox:
                 except:
                     margin += 0.05
                     pass
-
-            # left_point_inv = pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==left_point] - np.asarray(location)
-            # left_point_inv = np.dot(rmat_inv, left_point_inv.T)[1, 0]
-
-            # right_point_inv = pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==right_point] - np.asarray(location)
-            # right_point_inv = np.dot(rmat_inv, right_point_inv.T)[1, 0]
-            
-            # left_point = np.dot(rmat_inv, pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==left_point].T)[1, 0]
-            # right_point = np.dot(rmat_inv, pcd_in_dim_inv[pcd_in_dim_inv[:, 1]==right_point].T)[1, 0]
 
             if pillar_loc == 'left':
                 left_point += 0.2
@@ -309,7 +294,7 @@ class Fit3dBox:
 
             corners_3d = self._get_3d_corners(location, extra_dim, rmat)
             pcd_in_dim = self._get_pcd_in_dim(bf_pcd, corners_3d)
-            pcd_in_dim_inv = self._return_rot(pcd_in_dim, location, rmat_inv)
+            pcd_in_dim_inv = self._return_rot(pcd_in_dim, extra_dim, rmat_inv)
 
             # 지면 찾기
             floor_point = self.find_floor(pcd_in_dim_inv, location)
@@ -374,23 +359,24 @@ class Fit3dBox:
         center_pcd_in_dim = self._get_pcd_in_dim(bf_pcd, center_corners_3d)
         center_pcd_in_dim_inv = self._return_rot(center_pcd_in_dim, center_location, rmat_inv)
 
-        # center_left_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] > center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
-        # center_right_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] < center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
-        center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
-                                                    (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
-        center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
-        center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
-
-        center_left_point = np.min(center_left_range[:, 1])
-        center_right_point = np.max(center_right_range[:, 1])
-
-        center_y = center_left_point - abs(center_left_point - center_right_point)/2
-        center_y_mov = center_location[1] - center_y
-
         # mov_left_loc = np.asarray(left_bf_box['location']) - np.asarray(left_location_ori)
         mov_center_loc = np.asarray(center_bf_box['location']) - np.asarray(center_location_ori)
         # mov_right_loc = np.asarray(right_bf_box['location']) - np.asarray(right_location_ori)
 
+        try: # 상판 양쪽 하단에 포인트가 있을 경우 위치 조정
+            center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
+                                                        (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
+            center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
+            center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
+
+            center_left_point = np.min(center_left_range[:, 1])
+            center_right_point = np.max(center_right_range[:, 1])
+
+            center_y = center_left_point - abs(center_left_point - center_right_point)/2
+            center_y_mov = center_location[1] - center_y
+
+        except:
+            pass
 
         ## 타겟 프레임 객체 위치, 크기 조정
         for tf_ann in tf_anns:
@@ -416,21 +402,20 @@ class Fit3dBox:
                 center_corners_3d = self._get_3d_corners(center_location, center_dimension, rmat)
                 center_pcd_in_dim = self._get_pcd_in_dim(tf_pcd, center_corners_3d)
                 center_pcd_in_dim_inv = self._return_rot(center_pcd_in_dim, center_location, rmat_inv)
-
-                # center_left_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] > center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
-                # center_right_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 1] < center_location[1]) & (center_pcd_in_dim_inv[:, 2] < center_location[2])]
-
-                center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
-                                                            (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
-                center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
-                center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
-
-                center_left_point = np.min(center_left_range[:, 1])
-                center_right_point = np.max(center_right_range[:, 1])
                 
-                center_y = center_left_point - abs(center_left_point - center_right_point)/2
-                center_tf_box['location'][1] = center_y + center_y_mov
+                try: # 상판 양쪽 하단에 포인트가 있을 경우 위치 조정
+                    center_bottom_range = center_pcd_in_dim_inv[(center_pcd_in_dim_inv[:, 2] >= np.percentile(center_pcd_in_dim_inv[:, 2], 0)) & \
+                                                                (center_pcd_in_dim_inv[:, 2] <= np.percentile(center_pcd_in_dim_inv[:, 2], 5))]
+                    center_left_range = center_bottom_range[(center_bottom_range[:, 1] > center_location[1])]
+                    center_right_range = center_bottom_range[(center_bottom_range[:, 1] < center_location[1])]
 
+                    center_left_point = np.min(center_left_range[:, 1])
+                    center_right_point = np.max(center_right_range[:, 1])
+                    
+                    center_y = center_left_point - abs(center_left_point - center_right_point)/2
+                    center_tf_box['location'][1] = center_y + center_y_mov
+                except:
+                    pass
 
                 # 기둥 위치 조정
                 left_tf_box['location'][1] = center_tf_box['location'][1] + center_tf_box['dimension'][0]/2 - left_tf_box['dimension'][0]/2
@@ -481,7 +466,7 @@ class PointHandler:
         return corners_3d
 
 
-    def _get_pcd_in_dim(self, tf_pcd, corners_3d, rmat_inv):
+    def _get_pcd_in_dim(self, tf_pcd, corners_3d):
         x_min = np.min(corners_3d[0, :])
         x_max = np.max(corners_3d[0, :])
         y_min = np.min(corners_3d[1, :])
@@ -489,13 +474,13 @@ class PointHandler:
         z_min = np.min(corners_3d[2, :])
         z_max = np.max(corners_3d[2, :])
 
-        pcd_range = tf_pcd[(tf_pcd[:,0] >= x_min) & (tf_pcd[:,0] <= x_max) & \
+        pcd_in_dim = tf_pcd[(tf_pcd[:,0] >= x_min) & (tf_pcd[:,0] <= x_max) & \
                             (tf_pcd[:,1] >= y_min) & (tf_pcd[:,1] <= y_max) & \
                             (tf_pcd[:,2] >= z_min) & (tf_pcd[:,2] <= z_max)]
 
-        pcd_in_dim = np.dot(rmat_inv, pcd_range.T)
+        # pcd_in_dim = np.dot(rmat_inv, pcd_in_dim.T)
 
-        return pcd_in_dim.T
+        return pcd_in_dim
 
 
     def _return_rot(self, array, location, rmat_inv):
@@ -611,10 +596,10 @@ class ConvertBox(PointHandler, Fit3dBox):
 
 
 if __name__ == '__main__':
-    bf_df = pd.read_csv('/data/kimgh/NIA48_Algorithm/bestframe_roadsign_tunnel.csv', index_col=0)
-    bf_df = bf_df.sort_values(by=['category', 'clipname']).reset_index(drop=True)
-    bf_df = bf_df[['clipname', 'bestframe', 'id', 'category']]
-    bf_df = bf_df.loc[bf_df['category']=='ROAD_SIGN'].reset_index(drop=True)
+    bf_df = pd.read_csv('/data/kimgh/NIA48_Algorithm/bestframe.csv', index_col=0)
+    # bf_df = bf_df.sort_values(by=['category', 'clipname']).reset_index(drop=True)
+    # bf_df = bf_df[['clipname', 'bestframe', 'id', 'category']]
+    # bf_df = bf_df.loc[bf_df['category']=='ROAD_SIGN'].reset_index(drop=True)
 
     start = time.time()
 
@@ -641,8 +626,8 @@ if __name__ == '__main__':
                 with open('errors/error_ls.txt', 'a') as f:
                     f.write(error)
 
-                os.makedirs(f'errors/{error_type}', exist_ok=True)
-                with open(f'errors/{error_type}/{scene}.txt', 'a') as f:
+                os.makedirs(f'errors/{categories}/{error_type}', exist_ok=True)
+                with open(f'errors/{categories}/{error_type}/{scene}.txt', 'a') as f:
                     line = '-' * 100
                     f.write(f'{line}\n')
                     f.write(f'Error - [Scene: {scene}  Bf: {bf_num} | Tf: {tf_num} | Bf_id: {bf_id} | Category: {categories}]\n')
